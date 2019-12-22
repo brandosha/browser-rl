@@ -16,10 +16,7 @@ var policyNetwork = new PolicyNetwork(model, optimizer)
 var agentRewards = []
 var randomRewards = []
 
-var rewardsCsv = ""
-
 function train() {
-    var totalReward = 0
     var randomReward = 0
 
     function gameRound() {
@@ -35,11 +32,11 @@ function train() {
     }
     
     Array(50).fill(undefined).forEach(gameRound)
-    
-    policyNetwork.discountRewards(0)
-    policyNetwork.scaleAndApplyGradients((step) => {
-        totalReward += step.reward
 
+    var totalReward = policyNetwork.steps.map(step => step.reward).reduce((a,b) => a + b, 0)
+    
+    policyNetwork.standardizeRewards()
+    policyNetwork.scaleAndApplyGradients((step) => {
         var scaledGradients = { }
         for (const name in step.gradients) {
             scaledGradients[name] = step.gradients[name].mul(step.reward).div(step.actionProbablity)

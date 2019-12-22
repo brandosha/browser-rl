@@ -2,7 +2,7 @@ importScripts("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.4.0/dist/tf.min.j
 if (false) { var tf = require("@tensorflow/tfjs") } // for code completion purposes
 
 /**
- * @typedef StepData
+ * @typedef PolicyStepData
  * @property {tf.NamedTensorMap} gradients
  * @property {number} reward
  * @property {number} action
@@ -10,12 +10,6 @@ if (false) { var tf = require("@tensorflow/tfjs") } // for code completion purpo
  * @property {tf.Tensor} state
  */
 
-/**
- * @class
- * @property {tf.LayersModel} model
- * @property {tf.Optimizer} optimizer
- * @property {StepData[]} steps
- */
 class PolicyNetwork {
     /**
      * @param {tf.LayersModel} model 
@@ -28,7 +22,7 @@ class PolicyNetwork {
         this.modelIsRecurrent = model.layers.some(layer => layer instanceof tf.RNN)
 
         /**
-         * @type {StepData[]}
+         * @type {PolicyStepData[]}
          */
         this.steps = []
     }
@@ -37,7 +31,7 @@ class PolicyNetwork {
      * @callback ActionRewardFn
      * @param {number} action 
      * @param {tf.Tensor} state 
-     * @returns {number} reward 
+     * @returns {number} 
      */
 
     /**
@@ -100,9 +94,20 @@ class PolicyNetwork {
         }
     }
 
+    standardizeRewards() {
+        const rewards = this.steps.map(step => step.reward)
+        const rewardsTensor = tf.tensor1d(rewards)
+        const rewardsMean = rewardsTensor.mean()
+        const variance = rewardsTensor.sub(rewardsMean).square().mean()
+        const rewardsStd = variance.sqrt()
+
+        var standardizedRewards = rewardsTensor.sub(rewardsMean).divNoNan(rewardsStd).dataSync()
+        standardizedRewards.forEach((_, i) => this.steps[i].reward = standardizedRewards[i])
+    }
+
     /**
      * @callback GradScaleFn
-     * @param {StepData} step
+     * @param {PolicyStepData} step
      * @returns {tf.NamedTensorMap}
      */
 
