@@ -10,7 +10,7 @@ if (false) { var tf = require("@tensorflow/tfjs") } // for code completion purpo
  * @property {tf.Tensor} state
  */
 
-class PolicyNetwork {
+var PolicyNetwork = class {
     /**
      * @param {tf.LayersModel} model 
      * @param {tf.Optimizer} optimizer 
@@ -141,4 +141,24 @@ class PolicyNetwork {
             this.steps = []
         })
     }
+
+    /**
+     * @callback GradMapFn
+     * @param {tf.Tensor} grad 
+     * @returns {tf.Tensor} 
+     */
+
+    /**
+     * @param {tf.NamedTensorMap} gradients 
+     * @param {GradMapFn} newFn 
+     */
+    static mapGradients(gradients, newFn) {
+        var newGrad = { }
+        for (const name in gradients) {
+            newGrad[name] = newFn(gradients[name])
+        }
+        return newGrad
+    }
 }
+
+if (false) { module.exports = PolicyNetwork }

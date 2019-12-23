@@ -1,5 +1,8 @@
 importScripts("PolicyNetwork.js")
-if (false) { var tf = require("@tensorflow/tfjs") } // for code completion purposes
+if (false) { 
+    var PolicyNetwork = require("./PolicyNetwork.js")
+    var tf = require("@tensorflow/tfjs")
+} // for code completion purposes
 
 var model = tf.sequential({
     layers: [
@@ -20,7 +23,6 @@ function train() {
     var randomReward = 0
 
     function gameRound() {
-        var start = performance.now()
         var randIndex = Math.floor(Math.random() * 3)
         var input = Array(3).fill(0)
         input[randIndex] = 1
@@ -28,21 +30,17 @@ function train() {
         randomReward += input[Math.floor(Math.random() * 3)]
     
         policyNetwork.step(tf.tensor1d(input), action => input[action])
-        var start = performance.now()
     }
     
     Array(50).fill(undefined).forEach(gameRound)
 
     var totalReward = policyNetwork.steps.map(step => step.reward).reduce((a,b) => a + b, 0)
-    
+
     policyNetwork.standardizeRewards()
     policyNetwork.scaleAndApplyGradients((step) => {
-        var scaledGradients = { }
-        for (const name in step.gradients) {
-            scaledGradients[name] = step.gradients[name].mul(step.reward).div(step.actionProbablity)
-        }
-    
-        return scaledGradients
+        return PolicyNetwork.mapGradients(step.gradients, (grad) => {
+            return grad.mul(step.reward).div(step.actionProbablity)
+        })
     })
 
     agentRewards.push(totalReward)
