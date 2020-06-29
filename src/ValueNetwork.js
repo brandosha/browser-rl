@@ -1,7 +1,14 @@
 importScripts("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.4.0/dist/tf.min.js")
 if (false) { var tf = require("@tensorflow/tfjs") } // for code completion purposes
 
-var PolicyNetwork = class {
+/**
+ * @typedef ValueStepData
+ * @property {tf.Tensor} state
+ * @property {number} action
+ * @property {number} reward
+ */
+
+class ValueNetwork {
     /**
      * @param {tf.LayersModel} model 
      * @param {tf.Optimizer} optimizer 
@@ -13,46 +20,59 @@ var PolicyNetwork = class {
         this.modelIsRecurrent = model.layers.some(layer => layer instanceof tf.RNN)
 
         /**
-         * @typedef PolicyStepData
-         * @property {tf.NamedTensorMap} gradients
-         * @property {number} reward
-         * @property {number} action
-         * @property {number} actionProbablity
-         * @property {tf.Tensor} state
-         */
-
-        /**
-         * @type {PolicyStepData[]}
+         * @type {ValueStepData[]}
          */
         this.steps = []
     }
 
     /**
-     * @callback ActionRewardFn
+     * @callback RewardFn
      * @param {number} action 
      * @param {tf.Tensor} state 
-     * @returns {number} 
+     * @returns {number} reward 
      */
 
     /**
-     * @param {tf.Tensor | tf.Tensor[]} state 
-     * @param {ActionRewardFn} rewardFn 
+     * @callback ActionFn
+     * @param {tf.Tensor} qVals 
+     * @param {tf.Tensor} state 
+     * @returns {number} action 
      */
-    step(state, rewardFn) {
+
+    /**
+     * @param {tf.Tensor} state 
+     * @param {ActionFn} actionFn
+     * @param {RewardFn} rewardFn 
+     */
+    step(state, actionFn, rewardFn) {
+
         var action = 0
+        tf.tidy(() => {
+            var stateBatch = state.reshape([1].concat(state.shape))
+            var prediction = this.model.predict(stateBatch)
+
+            var qVals = prediction.squeeze()
+            if (this.modelIsRecurrent) {
+                var outputs = qVals.shape[0]
+                qVals = qVals.slice(outputs - 1, 1)
+            }
+
+            action = actionFn(qVals, state)
+        })
+
+        this.steps.push({
+            state: state,
+            action: action,
+            reward: rewardFn(action, state)
+        })
+        
+
+        /*var action = 0
         var actionProbablity = 0
         var gradients = tf.tidy(() => {
-            if (Array.isArray(state)) {
-                var stateBatch = []
-                state.forEach(val => {
-                    stateBatch.push(val.reshape([1].concat(val.shape)))
-                })
-            } else {
-                var stateBatch = state.reshape([1].concat(state.shape))
-            }
-            
+            var stateBatch = state.reshape([1].concat(state.shape))
+
             var gradients = this.optimizer.computeGradients(() => {
-                console.log(stateBatch)
                 var prediction = this.model.predict(stateBatch)
                 var out = prediction.squeeze()
 
@@ -87,7 +107,7 @@ var PolicyNetwork = class {
             actionProbablity: actionProbablity,
             reward: tf.tidy(() => rewardFn(action, state)),
             gradients: gradients
-        })
+        })*/
     }
 
     /**
@@ -102,20 +122,24 @@ var PolicyNetwork = class {
         }
     }
 
-    standardizeRewards() {
-        const rewards = this.steps.map(step => step.reward)
-        const rewardsTensor = tf.tensor1d(rewards)
-        const rewardsMean = rewardsTensor.mean()
-        const variance = rewardsTensor.sub(rewardsMean).square().mean()
-        const rewardsStd = variance.sqrt()
+    randomSteps(count) {
+        var indices = Array(this.steps.length).fill(undefined).map((_,i) => i)
+        Array(count).fill(undefined).map(() => {
+            var indicesIndex = Math.floor( Math.random() * indices.length )
+            var index = indices[indicesIndex]
+            var val = this.steps[index]
+            indices.splice(indicesIndex, 1)
+            return val
+        })
+    }
 
-        var standardizedRewards = rewardsTensor.sub(rewardsMean).divNoNan(rewardsStd).dataSync()
-        standardizedRewards.forEach((_, i) => this.steps[i].reward = standardizedRewards[i])
+    train() {
+        
     }
 
     /**
      * @callback GradScaleFn
-     * @param {PolicyStepData} step
+     * @param {ValueStepData} step
      * @returns {tf.NamedTensorMap}
      */
 
@@ -149,34 +173,4 @@ var PolicyNetwork = class {
             this.steps = []
         })
     }
-
-    /**
-     * @callback GradMapFn
-     * @param {tf.Tensor} grad 
-     * @returns {tf.Tensor} 
-     */
-
-    /**
-     * @param {tf.NamedTensorMap} gradients 
-     * @param {GradMapFn} newFn 
-     */
-    static mapGradients(gradients, newFn) {
-        var newGrad = { }
-        for (const name in gradients) {
-            newGrad[name] = newFn(gradients[name])
-        }
-        return newGrad
-    }
-
-    /**
-     * @param {PolicyStepData} step 
-     * @returns {NamedTensorMap}
-     */
-    static vanilla(step) {
-        return PolicyNetwork.mapGradients(step.gradients, (grad) => {
-            return grad.mul(step.reward).div(step.actionProbablity)
-        })
-    }
 }
-
-if (false) { module.exports = PolicyNetwork }
