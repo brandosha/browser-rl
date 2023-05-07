@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/brandosha/browser-rl#readme",
   "dependencies": {
-    "@tensorflow/tfjs": "^1.4.0"
+    "@tensorflow/tfjs": "^4.5.0"
   }
 }
